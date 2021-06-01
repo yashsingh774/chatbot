@@ -1,67 +1,106 @@
-const { WaterfallDialog, ComponentDialog } = require('botbuilder-dialogs');
+// Copyright (c) Microsoft Corporation. All rights reserved.
+// Licensed under the MIT License.
 
-const {ConfirmPrompt , ChoicePrompt , DateTimePrompt , NumberPrompt, TextPrompt} = require('botbuilder-dialogs');
+const { ConfirmPrompt, TextPrompt, DateTimePrompt, ChoicePrompt, DialogTurnStatus, ChoiceFactory, WaterfallDialog, DialogSet, ComponentDialog } = require('botbuilder-dialogs');
 
-const { DialogSet , DialogTurnStatus } = require('botbuilder-dialogs');
+const { CardFactory } = require('botbuilder');
+
+const RestaurantCard = require('../resources/adaptivecards/Restaurantcard')
+
+const CARDS = [
+
+    RestaurantCard
+];
+const CONFIRM_PROMPT = 'confirmPrompt';
+const TEXT_PROMPT = 'textPrompt';
+const CHOICE_PROMPT = 'choicePrompt';
+const WATERFALL_DIALOG = 'waterfallDialog';
+const NAME_PROMPT = 'NAME_PROMPT';
+const DATETIME_PROMPT = 'Datetime';
+class RrBot extends ComponentDialog {
+    constructor(userstate) {
+        super('Rrbot');
+        this.addDialog(new TextPrompt(TEXT_PROMPT));
+        this.addDialog(new TextPrompt(NAME_PROMPT))
+            .addDialog(new ConfirmPrompt(CONFIRM_PROMPT))
+            .addDialog(new ChoicePrompt(CHOICE_PROMPT))
+            .addDialog(new DateTimePrompt(DATETIME_PROMPT));
+        this.addDialog(new WaterfallDialog(WATERFALL_DIALOG, [
+            this.FirstStep.bind(this),
+            this.LocationStep.bind(this),
+            this.DatetimeStep.bind(this),
+            this.BookStep.bind(this),
+            this.SummaryStep.bind(this)
+            // this.nameConfirmStep.bind(this),
+            // this.ageStep.bind(this),
+            // this.pictureStep.bind(this),
+            // this.confirmStep.bind(this),
+            // this.summaryStep.bind(this)
+        ]));
+        this.initialDialogId = WATERFALL_DIALOG;
+        // See https://aka.ms/about-bot-activity-message to learn more about the message and other activity types.
+        // this.onMessage(async (context, next) => {
+        //     const replyText = `Echo: ${ context.activity.text }`;
+        //     await context.sendActivity(MessageFactory.text(replyText, replyText));
+        //     // By calling next() you ensure that the next BotHandler is run.
+        //     await next();
+        // });
+    }
+
+    async run(turnContext, accessor) {
+        const dialogSet = new DialogSet(accessor);
+        dialogSet.add(this);
+
+        const dialogContext = await dialogSet.createContext(turnContext);
+        const results = await dialogContext.continueDialog();
+        
+        if (results.status === DialogTurnStatus.empty) {
+            await dialogContext.beginDialog(this.id);
+        }
+    }
+    // await step.context.sendActivity({attachments: [CardFactory.adaptiveCard(CARDS[0])]
+    // });
 
 
-const CHOICE_PROMPT    = 'CHOICE_PROMPT';
-const CONFIRM_PROMPT   = 'CONFIRM_PROMPT';
-const TEXT_PROMPT      = 'TEXT_PROMPT';
-const NUMBER_PROMPT    = 'NUMBER_PROMPT';
-const DATETIME_PROMPT  = 'DATETIME_PROMPT';
-const WATERFALL_DIALOG = 'WATERFALL_DIALOG';
-var endDialog ='';
+    async FirstStep(step) {
+        // WaterfallStep always finishes with the end of the Waterfall or with another dialog; here it is a Prompt Dialog.
+        // Running a prompt here means the next WaterfallStep will be run when the user's response is received.
+    await step.context.sendActivity({
+        text: 'Enter details ',
+        attachments: [CardFactory.adaptiveCard(CARDS[0])]
+    });
+        return await step.prompt(CHOICE_PROMPT, {
+            prompt: 'Hii, Thanks for Contacting CDD Bot \nPlease select anyone',
+            choices: ChoiceFactory.toChoices(['Meeting Room Booking', 'Meeting Room Status'])
+        });
+    }
+    async LocationStep(step) {
+        step.values.transport = step.result.value;
+        return await step.prompt(NAME_PROMPT, 'Enter a Location');
+    }
 
+    async DatetimeStep(step) {
+        step.values.location = step.result;
+        return await step.prompt(DATETIME_PROMPT, 'Enter a Date');
+    }
 
-class MeetingroomDialog extends ComponentDialog{
+    async BookStep(step) {
+        step.values.Datetime = step.result.value;
 
-    constructor() {
-        super('meetingroomDialog');
+        return await step.prompt(NAME_PROMPT, 'Enter Name of person');
+    }
 
+    async SummaryStep(step) {
+        if (step.result) {
+            // Get the current profile object from user state.
+            const msg = `Your meeting scheduled in ${ step.values.location } and your name as ${ step.result }`;
 
+            await step.context.sendActivity(msg);
+        }
 
-this.addDialog(new TextPrompt(TEXT_PROMPT));
-this.addDialog(new ChoicePrompt(CHOICE_PROMPT));
-this.addDialog(new ConfirmPrompt(CONFIRM_PROMPT));
-this.addDialog(new NumberPrompt(NUMBER_PROMPT,this.noOfParticipantsValidator));
-this.addDialog(new DateTimePrompt(DATETIME_PROMPT));
-
-
-this.addDialog(new WaterfallDialog(WATERFALL_DIALOG, [
-    this.firstStep.bind(this),  // Ask confirmation if user wants to make reservation?
-    this.getName.bind(this),    // Get name from user
-    this.getNumberOfParticipants.bind(this),  // Number of participants for reservation
-    this.getDate.bind(this), // Date of reservation
-    this.getTime.bind(this),  // Time of reservation
-    this.confirmStep.bind(this), // Show summary of values entered by user and ask confirmation to make reservation
-    this.summaryStep.bind(this)
-           
-]));
-
-
-
-
-this.initialDialogId = WATERFALL_DIALOG;
-
-
-   }
-
- async run(turnContext, accessor) {
-    const dialogSet = new DialogSet(accessor);
-    dialogSet.add(this);
-
-    const dialogContext = await dialogSet.createContext(turnContext);
-    const results = await dialogContext.continueDialog();
-    if (results.status === DialogTurnStatus.empty) {
-        await dialogContext.beginDialog(this.id);
+        // WaterfallStep always finishes with the end of the Waterfall or with another dialog; here it is the end.
+        return await step.endDialog();
     }
 }
 
-async firstStep(step) {
-endDialog = false;
-// Running a prompt here means the next WaterfallStep will be run when the users response is received.
-return await step.prompt(CONFIRM_PROMPT, 'Would you like to make a reservation?', ['yes', 'no']);
-      
-}   
-}
+module.exports.RrBot = RrBot;
